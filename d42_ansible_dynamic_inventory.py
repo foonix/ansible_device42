@@ -2,7 +2,7 @@
 
 import argparse
 import sys
-from lib import *
+from lib import get_conf, Ansible, Device42
 
 try:
     import json
@@ -18,15 +18,15 @@ class Inventory(object):
 
         # Called with `--list`.
         if self.args.list:
-            self.inventory = self.inventory()
+            self.inventory = self.get_groups()
         # Called with `--host [hostname]`.
         # If no groups or vars are present, return an empty inventory.
         else:
             self.inventory = self.empty_inventory()
 
-        print json.dumps(self.inventory)
+        print(json.dumps(self.inventory, indent=4))
 
-    def inventory(self):
+    def get_groups(self):
         conf = get_conf()
         ansible = Ansible(conf)
         groups = ansible.get_grouping(Device42(conf).doql())

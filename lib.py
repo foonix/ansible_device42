@@ -1,11 +1,13 @@
-from StringIO import StringIO
-import requests
-import codecs
+try:
+    from StringIO import StringIO
+except ImportError:
+    from io import StringIO
+import csv
 import base64
 import imp
-import csv
-import sys
 import os
+import sys
+import requests
 try:
     import json
 except ImportError:
@@ -15,33 +17,33 @@ def get_conf():
     try:
         conf = imp.load_source('conf', 'conf').__dict__
         if 'D42_SKIP_SSL_CHECK' in conf and conf['D42_SKIP_SSL_CHECK'] == True:
-            requests.packages.urllib3.disable_warnings(requests.packages.urllib3.exceptions.InsecureRequestWarning)
+            requests.urllib3.disable_warnings(requests.urllib3.exceptions.InsecureRequestWarning)
     except:
         if 'D42_SKIP_SSL_CHECK' in os.environ and os.environ['D42_SKIP_SSL_CHECK'] == 'True':
-            requests.packages.urllib3.disable_warnings(requests.packages.urllib3.exceptions.InsecureRequestWarning)
+            requests.urllib3.disable_warnings(requests.urllib3.exceptions.InsecureRequestWarning)
 
         if 'D42_URL' not in os.environ:
-            print 'Please set D42_URL environ.'
+            print('Please set D42_URL environ.')
             sys.exit()
 
         if 'D42_USER' not in os.environ:
-            print 'Please set D42_USER environ.'
+            print('Please set D42_USER environ.')
             sys.exit()
 
         if 'D42_PWD' not in os.environ:
-            print 'Please set D42_PWD environ.'
+            print('Please set D42_PWD environ.')
             sys.exit()
 
         if 'GROUP_BY_QUERY' not in os.environ:
-            print 'Please set GROUP_BY_QUERY environ.'
+            print('Please set GROUP_BY_QUERY environ.')
             sys.exit()
 
         if 'GROUP_BY_FIELD' not in os.environ:
-            print 'Please set GROUP_BY_FIELD environ.'
+            print('Please set GROUP_BY_FIELD environ.')
             sys.exit()
 
         if 'GROUP_BY_REFERENCE_FIELD' not in os.environ:
-            print 'Please set GROUP_BY_REFERENCE_FIELD environ.'
+            print('Please set GROUP_BY_REFERENCE_FIELD environ.')
             sys.exit()
 
         conf = {
@@ -65,15 +67,15 @@ class Device42:
 
     def fetcher(self, url, query):
         headers = {
-            'Authorization': 'Basic ' + base64.b64encode(self.username + ':' + self.password),
+            'Authorization': 'Basic ' + base64.b64encode((self.username + ':' + self.password).encode('utf-8')).decode('utf-8'),
             'Content-Type': 'application/x-www-form-urlencoded'
         }
 
-        r = requests.post(url, data={
+        response = requests.post(url, data={
             'query': query,
             'header': 'yes'
         }, headers=headers, verify=False)
-        return r.text
+        return response.text
 
     def doql(self):
         url = self.base_url + '/services/data/v1.0/query/'
@@ -81,9 +83,9 @@ class Device42:
 
     @staticmethod
     def get_list_from_csv(text):
-        f = StringIO(text.encode("utf-8", "replace"))
+        csv_buffer = StringIO(text)
         list_ = []
-        dict_reader = csv.DictReader(f, quotechar='"', delimiter=',', quoting=csv.QUOTE_ALL, skipinitialspace=True, dialect='excel')
+        dict_reader = csv.DictReader(csv_buffer, quotechar='"', delimiter=',', quoting=csv.QUOTE_ALL, skipinitialspace=True, dialect='excel')
         for item in dict_reader:
             list_.append(item)
 
@@ -108,22 +110,22 @@ class Ansible:
                     if object_[self.conf['GROUP_BY_FIELD']] not in groups:
                         groups[object_[self.conf['GROUP_BY_FIELD']]] = []
                     groups[object_[self.conf['GROUP_BY_FIELD']]].append(object_[self.conf['GROUP_BY_REFERENCE_FIELD']])
-            except Exception as e:
-                print object_
+            except Exception:
+                print(object_)
                 sys.exit()
         return groups
 
     @staticmethod
     def write_inventory_file(groups):
 
-        f = open("hosts", "w")
+        hosts_file = open("hosts", "w")
 
         for group in groups:
-            f.write('[' + group + ']\n')
+            hosts_file.write('[' + group + ']\n')
             for device in groups[group]:
-                f.write(device + '\n')
-            f.write('\n')
+                hosts_file.write(device + '\n')
+            hosts_file.write('\n')
 
-        f.close()
+        hosts_file.close()
 
         return True
