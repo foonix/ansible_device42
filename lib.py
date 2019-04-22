@@ -18,7 +18,7 @@ def get_conf():
         conf = imp.load_source('conf', 'conf').__dict__
         if 'D42_SKIP_SSL_CHECK' in conf and conf['D42_SKIP_SSL_CHECK'] == True:
             requests.urllib3.disable_warnings(requests.urllib3.exceptions.InsecureRequestWarning)
-    except:
+    except FileNotFoundError:
         if 'D42_SKIP_SSL_CHECK' in os.environ and os.environ['D42_SKIP_SSL_CHECK'] == 'True':
             requests.urllib3.disable_warnings(requests.urllib3.exceptions.InsecureRequestWarning)
 
@@ -54,6 +54,9 @@ def get_conf():
             'GROUP_BY_FIELD': os.environ['GROUP_BY_FIELD'],
             'GROUP_BY_REFERENCE_FIELD': os.environ['GROUP_BY_REFERENCE_FIELD']
         }
+    except Exception as e:
+        print("Failed to parse conf file:", type(e).__name__, str(e))
+        sys.exit()
     return conf
 
 class Device42:
