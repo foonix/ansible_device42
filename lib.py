@@ -76,24 +76,19 @@ class Device42:
 
         response = requests.post(url, data={
             'query': query,
-            'header': 'yes'
+            'output_type': 'json'
         }, headers=headers, verify=False)
         return response.text
 
     def doql(self):
         url = self.base_url + '/services/data/v1.0/query/'
-        return self.get_list_from_csv(self.fetcher(url, self.query))
+        doql_response = json.loads(self.fetcher(url, self.query))
 
-    @staticmethod
-    def get_list_from_csv(text):
-        csv_buffer = StringIO(text)
-        list_ = []
-        dict_reader = csv.DictReader(csv_buffer, quotechar='"', delimiter=',', quoting=csv.QUOTE_ALL, skipinitialspace=True, dialect='excel')
-        for item in dict_reader:
-            list_.append(item)
+        if(type(doql_response) is dict and 'error' in doql_response):
+            print('DOQL error:', doql_response['error'])
+            sys.exit()
 
-        return list_
-
+        return doql_response
 
 class Ansible:
 
@@ -123,7 +118,12 @@ class Ansible:
 
         hosts_file = open("hosts", "w")
 
+        # Ungrouped devices must be outside of ini block
+        for device in groups[None]:
+            hosts_file.write(device + '\n')
+
         for group in groups:
+            if group is None: continue
             hosts_file.write('[' + group + ']\n')
             for device in groups[group]:
                 hosts_file.write(device + '\n')
