@@ -1,9 +1,3 @@
-try:
-    from StringIO import StringIO
-except ImportError:
-    from io import StringIO
-import csv
-import base64
 import imp
 import os
 import sys
@@ -16,7 +10,7 @@ except ImportError:
 def get_conf():
     try:
         conf = imp.load_source('conf', 'conf').__dict__
-        if 'D42_SKIP_SSL_CHECK' in conf and conf['D42_SKIP_SSL_CHECK'] == True:
+        if 'D42_SKIP_SSL_CHECK' in conf and conf['D42_SKIP_SSL_CHECK']:
             requests.urllib3.disable_warnings(requests.urllib3.exceptions.InsecureRequestWarning)
     except FileNotFoundError:
         if 'D42_SKIP_SSL_CHECK' in os.environ and os.environ['D42_SKIP_SSL_CHECK'] == 'True':
@@ -54,8 +48,8 @@ def get_conf():
             'GROUP_BY_FIELD': os.environ['GROUP_BY_FIELD'],
             'GROUP_BY_REFERENCE_FIELD': os.environ['GROUP_BY_REFERENCE_FIELD']
         }
-    except Exception as e:
-        print("Failed to parse conf file:", type(e).__name__, str(e))
+    except ImportError as import_error:
+        print("Failed to parse conf file:", type(import_error).__name__, str(import_error))
         sys.exit()
     return conf
 
@@ -69,22 +63,17 @@ class Device42:
         self.query = self.conf['GROUP_BY_QUERY']
 
     def fetcher(self, url, query):
-        headers = {
-            'Authorization': 'Basic ' + base64.b64encode((self.username + ':' + self.password).encode('utf-8')).decode('utf-8'),
-            'Content-Type': 'application/x-www-form-urlencoded'
-        }
-
         response = requests.post(url, data={
             'query': query,
             'output_type': 'json'
-        }, headers=headers, verify=False)
+        }, auth=(self.username, self.password), verify=False)
         return response.text
 
     def doql(self):
         url = self.base_url + '/services/data/v1.0/query/'
         doql_response = json.loads(self.fetcher(url, self.query))
 
-        if(type(doql_response) is dict and 'error' in doql_response):
+        if(isinstance(doql_response, dict) and 'error' in doql_response):
             print('DOQL error:', doql_response['error'])
             sys.exit()
 
@@ -98,37 +87,35 @@ class Ansible:
     def get_grouping(self, objects):
         groups = {}
         for object_ in objects:
-            try:
-                if self.conf['SPLIT_GROUP_BY_COMMA']:
-                    for group in object_[self.conf['GROUP_BY_FIELD']].split(','):
-                        if group not in groups:
-                            groups[group] = []
-                        groups[group].append(object_[self.conf['GROUP_BY_REFERENCE_FIELD']])
-                else:
-                    if object_[self.conf['GROUP_BY_FIELD']] not in groups:
-                        groups[object_[self.conf['GROUP_BY_FIELD']]] = []
-                    groups[object_[self.conf['GROUP_BY_FIELD']]].append(object_[self.conf['GROUP_BY_REFERENCE_FIELD']])
-            except Exception:
-                print(object_)
-                sys.exit()
+            if self.conf['SPLIT_GROUP_BY_COMMA']:
+                for group in object_[self.conf['GROUP_BY_FIELD']].split(','):
+                    if group not in groups:
+                        groups[group] = []
+                    groups[group].append(object_[self.conf['GROUP_BY_REFERENCE_FIELD']])
+            else:
+                if object_[self.conf['GROUP_BY_FIELD']] not in groups:
+                    groups[object_[self.conf['GROUP_BY_FIELD']]] = []
+                groups[object_[self.conf['GROUP_BY_FIELD']]].append(
+                    object_[self.conf['GROUP_BY_REFERENCE_FIELD']]
+                )
+
         return groups
 
     @staticmethod
     def write_inventory_file(groups):
 
-        hosts_file = open("hosts", "w")
+        with open("hosts", "w") as hosts_file:
+            # Ungrouped devices must be outside of ini block
+            if None in groups:
+                for device in groups[None]:
+                    hosts_file.write(device + '\n')
 
-        # Ungrouped devices must be outside of ini block
-        for device in groups[None]:
-            hosts_file.write(device + '\n')
-
-        for group in groups:
-            if group is None: continue
-            hosts_file.write('[' + group + ']\n')
-            for device in groups[group]:
-                hosts_file.write(device + '\n')
-            hosts_file.write('\n')
-
-        hosts_file.close()
+            for group in groups:
+                if group is None:
+                    continue
+                hosts_file.write('[' + group + ']\n')
+                for device in groups[group]:
+                    hosts_file.write(device + '\n')
+                hosts_file.write('\n')
 
         return True

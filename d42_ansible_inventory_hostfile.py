@@ -1,6 +1,4 @@
 import sys
-import json
-import requests
 from lib import get_conf, Ansible, Device42
 
 if __name__ == '__main__':
